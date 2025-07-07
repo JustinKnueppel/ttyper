@@ -1,75 +1,61 @@
 open Minttea
 
-type model = {
-  choices : (string * [`selected | `unselected]) list;
-  cursor : int;
+let dark_gray = Spices.color "241"
+let help = Spices.(default |> faint true |> fg dark_gray)
+let keyword fmt = Spices.(help |> bold true |> build) fmt
+let help fmt = Spices.(help |> build) fmt
+
+type state = {
+  measured : float;
+  start_time : Ptime.t;
+  quit : bool;
+  stopped : bool;
 }
+
+let ref = Riot.Ref.make ()
+let init _ = Command.Set_timer (ref, 0.01)
 
 let initial_model =
   {
-    cursor = 0;
-    choices =
-      [
-        ("Food", `unselected);
-        ("Water", `unselected);
-        ("Soda", `unselected);
-      ];
+    start_time = Ptime_clock.now ();
+    measured = 0.;
+    quit = false;
+    stopped = false;
   }
-
-let init _model = Command.Noop
 
 let update event model =
   match event with
-   | Event.KeyDown (Key "q") -> (model, Command.Quit)
-   | Event.KeyDown (Up | Key "k") ->
-      let cursor =
-        if model.cursor = 0 then List.length model.choices - 1
-        else model.cursor - 1
+  | Event.KeyDown (Key "r", _modifier) ->
+      let start_time = Ptime_clock.now () in
+      let measured = 0. in
+      ({ model with start_time; measured }, Command.Set_timer (ref, 0.01))
+  | Event.KeyDown (Key "s", _modifier) ->
+      let stopped = not model.stopped in
+      ({ model with stopped }, Command.Set_timer (ref, 0.01))
+  | Event.KeyDown ((Key "q" | Escape), _modifier) ->
+      ({ model with quit = true }, Command.Quit)
+  | Event.Timer _ref ->
+      let model =
+        if model.stopped then
+          let start_time = Ptime_clock.now () in
+          { model with start_time }
+        else
+          let now = Ptime_clock.now () in
+          let diff = Ptime.diff now model.start_time in
+          let measured = Ptime.Span.to_float_s diff +. model.measured in
+          { model with measured; start_time = now }
       in
-      ({ model with cursor }, Command.Noop)
-  (* if we press down or `j`, we move down in the list *)
-  | Event.KeyDown (Down | Key "j") ->
-      let cursor =
-        if model.cursor = List.length model.choices - 1 then 0
-        else model.cursor + 1
-      in
-      ({ model with cursor }, Command.Noop)
-  (* when we press enter or space we toggle the item in the list
-     that the cursor points to *)
-  | Event.KeyDown (Enter | Space) ->
-      let toggle status =
-        match status with `selected -> `unselected | `unselected -> `selected
-      in
-      let choices =
-        List.mapi
-          (fun idx (name, status) ->
-            let status = if idx = model.cursor then toggle status else status in
-            (name, status))
-          model.choices
-      in
-      ({ model with choices }, Command.Noop)
+      (model, Command.Set_timer (ref, 0.01))
   | _ -> (model, Command.Noop)
 
 let view model =
-  (* we create our options by mapping over them *)
-  let options =
-    model.choices
-    |> List.mapi (fun idx (name, checked) ->
-           let cursor = if model.cursor = idx then ">" else " " in
-           let checked = if checked = `selected then "x"  else " " in
-           Format.sprintf "%s [%s] %s" cursor checked name)
-    |> String.concat "\n"
-  in
-  (* and we send the UI for rendering! *)
-  Format.sprintf
-    {|
-What should we buy at the market?
+  if model.quit then Format.sprintf "%.3fs" model.measured
+  else
+    let help =
+      "  " ^ keyword "s"
+      ^ help " %s • " (if model.stopped then "start" else "stop")
+      ^ keyword "r" ^ help " reset • " ^ keyword "q" ^ help " quit "
+    in
+    Format.sprintf "Elapsed: %.3fs\n\n%s" model.measured help
 
-%s
-
-Press q to quit.
-
-  |} options
-
-let app = Minttea.app ~init ~update ~view ()
-let () = Minttea.start app ~initial_model
+let () = Minttea.app ~init ~update ~view () |> Minttea.start ~initial_model

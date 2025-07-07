@@ -15,6 +15,11 @@
 
 (documentation https://url/to/documentation)
 
+ (pin 
+   (url "git+github.com/JustinKnueppel/minttea.git")
+   (package (name minttea))
+   (package (name spices)))
+
 (package
  (name ttyper)
  (synopsis "A short synopsis")

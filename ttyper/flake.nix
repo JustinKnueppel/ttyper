@@ -4,10 +4,10 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
-    # minttea = {
-    #   url = "github:leostera/minttea";
-    #   inputs.nixpkgs.follows = "nixpkgs";
-    # };
+    minttea = {
+      url = "github:JustinKnueppel/minttea";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
@@ -50,11 +50,9 @@
               inherit version;
               pname = "ttyper";
               propagatedBuildInputs = with ocamlPackages; [
-                minttea
-                spices
-                # inputs'.minttea.packages.default
-                # inputs'.minttea.packages.spices
-                # inputs'.minttea.packages.leaves
+                inputs'.minttea.packages.default
+                inputs'.minttea.packages.spices
+                inputs'.minttea.packages.leaves
               ];
               src = ./.;
             };

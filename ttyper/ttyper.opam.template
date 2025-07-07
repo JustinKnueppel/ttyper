@@ -1,0 +1,4 @@
+pin-depends: [
+  ["minttea.dev" "git+https://github.com/JustinKnueppel/minttea#main"]
+  ["gluon.dev" "git+https://github.com/riot-ml/gluon.git#main"]
+]
