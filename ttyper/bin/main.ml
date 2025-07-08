@@ -1,61 +1,34 @@
 open Minttea
 
-let dark_gray = Spices.color "241"
-let help = Spices.(default |> faint true |> fg dark_gray)
-let keyword fmt = Spices.(help |> bold true |> build) fmt
-let help fmt = Spices.(help |> build) fmt
-
 type state = {
-  measured : float;
-  start_time : Ptime.t;
-  quit : bool;
-  stopped : bool;
+  words : string list;
+  typed_rev : string list; (* *)
+  stop : bool;
 }
 
-let ref = Riot.Ref.make ()
-let init _ = Command.Set_timer (ref, 0.01)
+let rec join sep = function
+    | [] -> ""
+  | [s] -> s
+  | s::tl -> s ^ sep ^ join sep tl
 
-let initial_model =
-  {
-    start_time = Ptime_clock.now ();
-    measured = 0.;
-    quit = false;
-    stopped = false;
-  }
+let init _ = Command.Noop
 
-let update event model =
+let initial_model = {
+  words = String.fold_left (fun acc c -> String.make 1 c :: acc) [] "hello world" |> List.rev;
+  typed_rev = [];
+  stop = false;
+}
+
+let update event model = 
   match event with
-  | Event.KeyDown (Key "r", _modifier) ->
-      let start_time = Ptime_clock.now () in
-      let measured = 0. in
-      ({ model with start_time; measured }, Command.Set_timer (ref, 0.01))
-  | Event.KeyDown (Key "s", _modifier) ->
-      let stopped = not model.stopped in
-      ({ model with stopped }, Command.Set_timer (ref, 0.01))
-  | Event.KeyDown ((Key "q" | Escape), _modifier) ->
-      ({ model with quit = true }, Command.Quit)
-  | Event.Timer _ref ->
-      let model =
-        if model.stopped then
-          let start_time = Ptime_clock.now () in
-          { model with start_time }
-        else
-          let now = Ptime_clock.now () in
-          let diff = Ptime.diff now model.start_time in
-          let measured = Ptime.Span.to_float_s diff +. model.measured in
-          { model with measured; start_time = now }
-      in
-      (model, Command.Set_timer (ref, 0.01))
+  | Event.KeyDown (Event.Escape, _) -> ({model with stop = true}, Command.Quit)
+      | Event.KeyDown (Event.Backspace, _mod) -> ({model with typed_rev = List.drop 1 model.typed_rev}, Command.Noop)
+  | Event.KeyDown (Event.Key key, _mod) -> ({model with typed_rev = key :: model.typed_rev }, Command.Noop)
+  | Event.KeyDown (Event.Space, _mod) -> ({model with typed_rev = " " :: model.typed_rev }, Command.Noop)
   | _ -> (model, Command.Noop)
 
 let view model =
-  if model.quit then Format.sprintf "%.3fs" model.measured
-  else
-    let help =
-      "  " ^ keyword "s"
-      ^ help " %s • " (if model.stopped then "start" else "stop")
-      ^ keyword "r" ^ help " reset • " ^ keyword "q" ^ help " quit "
-    in
-    Format.sprintf "Elapsed: %.3fs\n\n%s" model.measured help
+  if model.stop then Format.sprintf "Typed %d characters" @@ List.length model.typed_rev
+  else Format.sprintf "%s\n\n%s" (join "" model.words) (join "" @@ List.rev model.typed_rev)
 
 let () = Minttea.app ~init ~update ~view () |> Minttea.start ~initial_model
